@@ -37,17 +37,36 @@ void ip::createActions()
     exitAction->setShortcut (tr("Ctrl+Q"));
     exitAction->setStatusTip (QStringLiteral("退出程式"));
     connect (exitAction, SIGNAL (triggered()),this, SLOT (close()));
+
+    big = new QAction (QStringLiteral("放大&B"),this);
+    big->setShortcut (tr("Ctrl+B"));
+    big->setStatusTip (QStringLiteral("放大"));
+    connect (big, SIGNAL (triggered()), this, SLOT (bigfile()));
+    small = new QAction (QStringLiteral("縮小&S"),this);
+    small->setShortcut (tr("Ctrl+S"));
+    small->setStatusTip (QStringLiteral("退出程式"));
+    connect (small, SIGNAL (triggered()),this, SLOT (smallfile()));
 }
 void ip::createMenus()
 {
     fileMenu = menuBar()->addMenu (QStringLiteral("檔案&F"));
     fileMenu->addAction (openFileAction);
     fileMenu->addAction(exitAction);
+
+    fileMenu = menuBar()->addMenu (QStringLiteral("工具&P"));
+    fileMenu->addAction (big);
+    fileMenu->addAction(small);
 }
 void ip::createToolBars()
 {
     fileTool=addToolBar("file");
     fileTool->addAction(openFileAction);
+
+    filebig=addToolBar("bigg");
+    filebig->addAction(big);
+
+    filesmall=addToolBar("smalll");
+    filesmall->addAction(small);
 }
 void ip::loadFile(QString filename)
 {
@@ -74,3 +93,22 @@ void ip::showopenFile()
         }
     }
 }
+void ip::bigfile()
+{
+    QImage bigfile;
+    bigfile=img.scaled(img.width()*2,img.width()*2);
+    QLabel *ret=new QLabel();
+    ret->setPixmap(QPixmap::fromImage(bigfile));
+    ret->setWindowTitle(tr("放大結果"));
+    ret->show();
+}
+void ip::smallfile()
+{
+    QImage smallfile;
+    smallfile=img.scaled(img.width()/2,img.width()/2);
+    QLabel *ret=new QLabel();
+    ret->setPixmap(QPixmap::fromImage(smallfile));
+    ret->setWindowTitle(tr("縮小結果"));
+    ret->show();
+}
+
