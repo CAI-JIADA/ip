@@ -1,6 +1,5 @@
 #include "ip.h"
 //#include "mouseevent.h"
-#include<QHBoxLayout>
 #include<QMenuBar>
 #include<QFileDialog>
 #include<QDebug>
@@ -207,7 +206,7 @@ void ip::showGTranform()
 // 新增：將 QLabel 座標換算成原圖座標，避免放大/縮小造成查詢錯位
 QPoint ip::mapLabelToImage(const QPoint &pt) const
 {
-    if (img.isNull() || imgwin->width() == 0 || imgwin->height() == 0) return QPoint(0, 0);
+    if (img.isNull() || imgwin == nullptr || imgwin->width() == 0 || imgwin->height() == 0) return QPoint(0, 0);
     const double scaleX = static_cast<double>(img.width()) / imgwin->width();
     const double scaleY = static_cast<double>(img.height()) / imgwin->height();
     const int imgX = qBound(0, static_cast<int>(pt.x() * scaleX), img.width() - 1);
@@ -218,7 +217,7 @@ QPoint ip::mapLabelToImage(const QPoint &pt) const
 // 新增：矩形選取換算成原圖矩形，並限制在原圖範圍內
 QRect ip::mapLabelRectToImage(const QRect &rect) const
 {
-    if (img.isNull()) return QRect();
+    if (img.isNull() || imgwin == nullptr) return QRect();
     QPoint topLeft = mapLabelToImage(rect.topLeft());
     QPoint bottomRight = mapLabelToImage(rect.bottomRight());
     QRect mapped(topLeft, bottomRight);
