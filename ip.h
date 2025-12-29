@@ -7,6 +7,7 @@
 #include<QToolBar>
 #include<QImage>
 #include<QLabel>
+#include"gtransform.h"
 
 #include <QMainWindow>
 
@@ -25,7 +26,9 @@ private slots:
     void showopenFile();
     void bigfile();
     void smallfile();
+    void showGTranform();
 private:
+    GTransform *gwin;
     QWidget *central;
     QMenu   *fileMenu;
     QToolBar *fileTool;
@@ -38,6 +41,7 @@ private:
     QAction *exitAction;
     QAction *big;
     QAction *small;
+    QAction *GAction;
     int x=300;
     int y=200;
 

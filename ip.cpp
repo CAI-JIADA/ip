@@ -12,6 +12,7 @@ ip::ip(QWidget *parent)
     QHBoxLayout *mainLayout = new QHBoxLayout (central);
     imgwin = new QLabel();
     QPixmap *initPixmap = new QPixmap(300,200);
+    gwin=new GTransform();
     initPixmap->fill(QColor(255,255,255));
     imgwin->resize (300,200);
     imgwin->setScaledContents (true);
@@ -38,6 +39,12 @@ void ip::createActions()
     exitAction->setStatusTip (QStringLiteral("退出程式"));
     connect (exitAction, SIGNAL (triggered()),this, SLOT (close()));
 
+    GAction = new QAction (QStringLiteral("幾何轉換"),this);
+    GAction->setShortcut (tr("Ctrl+G"));
+    GAction->setStatusTip (QStringLiteral("影像幾何轉換"));
+    connect (GAction, SIGNAL (triggered()), this, SLOT (showGTranform()));
+    connect (exitAction, SIGNAL (triggered()),gwin, SLOT (close()));
+
     big = new QAction (QStringLiteral("放大&B"),this);
     big->setShortcut (tr("Ctrl+B"));
     big->setStatusTip (QStringLiteral("放大"));
@@ -46,11 +53,14 @@ void ip::createActions()
     small->setShortcut (tr("Ctrl+S"));
     small->setStatusTip (QStringLiteral("退出程式"));
     connect (small, SIGNAL (triggered()),this, SLOT (smallfile()));
+
+
 }
 void ip::createMenus()
 {
     fileMenu = menuBar()->addMenu (QStringLiteral("檔案&F"));
     fileMenu->addAction (openFileAction);
+    fileMenu->addAction(GAction);
     fileMenu->addAction(exitAction);
 
     fileMenu = menuBar()->addMenu (QStringLiteral("工具&P"));
@@ -61,6 +71,7 @@ void ip::createToolBars()
 {
     fileTool=addToolBar("file");
     fileTool->addAction(openFileAction);
+    fileMenu->addAction(GAction);
 
     filebig=addToolBar("bigg");
     filebig->addAction(big);
@@ -110,5 +121,12 @@ void ip::smallfile()
     ret->setPixmap(QPixmap::fromImage(smallfile));
     ret->setWindowTitle(tr("縮小結果"));
     ret->show();
+}
+void ip::showGTranform()
+{
+    if (!img.isNull())
+    gwin->srcImg = img;
+    gwin->inWin->setPixmap (QPixmap:: fromImage (gwin->srcImg));
+    gwin->show();
 }
 
