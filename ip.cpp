@@ -9,6 +9,11 @@
 #include<QPainter>
 #include<QPen>
 #include<QPushButton>
+#include<QStandardPaths>
+#include<QDir>
+
+static constexpr int kPreviewPaddingW = 40; // 新增：預覽窗左右留白
+static constexpr int kPreviewPaddingH = 80; // 新增：預覽窗上下留白與按鈕列空間
 
 // 新增：可在預覽上手繪的標記元件
 class DrawingLabel : public QLabel
@@ -310,10 +315,12 @@ void ip::mouseReleaseEvent (QMouseEvent * event)
 
                 connect(saveBtn, &QPushButton::clicked, preview, [preview, drawArea]() {
                     // 新增：儲存繪製後結果
+                    QString defaultDir = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
+                    if (defaultDir.isEmpty()) defaultDir = QDir::homePath();
                     QString path = QFileDialog::getSaveFileName(
                         preview,
                         QStringLiteral("儲存標註影像"),
-                        "",
+                        defaultDir, // 新增：預設路徑指到圖片資料夾
                         QStringLiteral("PNG Files (*.png);;JPG Files (*.jpg)")
                     );
                     if (!path.isEmpty()) {
@@ -322,9 +329,7 @@ void ip::mouseReleaseEvent (QMouseEvent * event)
                 });
                 connect(closeBtn, &QPushButton::clicked, preview, &QWidget::close);
 
-                const int paddingW = 40; // 新增：預覽窗左右留白
-                const int paddingH = 80; // 新增：預覽窗上下留白與按鈕列空間
-                preview->resize(zoomed.width() + paddingW, zoomed.height() + paddingH);
+                preview->resize(zoomed.width() + kPreviewPaddingW, zoomed.height() + kPreviewPaddingH);
                 preview->show();
             }
         }
