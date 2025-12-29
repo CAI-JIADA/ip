@@ -56,7 +56,7 @@ void ip::createActions()
     GAction = new QAction (QStringLiteral("幾何轉換"),this);
     GAction->setShortcut (tr("Ctrl+G"));
     GAction->setStatusTip (QStringLiteral("影像幾何轉換"));
-    connect (GAction, SIGNAL (triggered()), this, SLOT (showmouseevent()));
+    connect (GAction, SIGNAL (triggered()), this, SLOT (showGTranform())); // 修正：連結到正確的槽函式
     connect (exitAction, SIGNAL (triggered()),gwin, SLOT (close()));
 
 
@@ -151,24 +151,44 @@ void ip::showGTranform()
 
 void ip::mouseMoveEvent (QMouseEvent * event)
 {
-    int x = event->x();
-    int y = event->y();
+    const QPoint labelPos = imgwin->mapFromGlobal(event->globalPos()); // 新增：將座標轉為影像區域
+    int x = labelPos.x();
+    int y = labelPos.y();
 
     QString str="(" + QString::number(x) + ", " + QString::number(y) +")";
     if(!img.isNull() && x >= 0 && x < imgwin->width() && y >= 0 && y < imgwin->height())
     {
-        int gray = qGray(img.pixel(x,y));
+        const double scaleX = static_cast<double>(img.width()) / imgwin->width();
+        const double scaleY = static_cast<double>(img.height()) / imgwin->height();
+        const int imgX = qBound(0, static_cast<int>(x * scaleX), img.width() - 1);
+        const int imgY = qBound(0, static_cast<int>(y * scaleY), img.height() - 1);
+        int gray = qGray(img.pixel(imgX,imgY));
         str += ("=" + QString::number(gray));
     }
     MousePosLabel->setText(str);
+
+    if (isSelecting && rubberBand) { // 新增：拖曳時更新選取框
+        QRect rect(selectionOrigin, labelPos);
+        rubberBand->setGeometry(rect.normalized());
+    }
 }
 
 void ip::mousePressEvent (QMouseEvent * event)
 {
-    QString str="(" + QString::number(event->x()) + ", " + QString::number(event->y()) +")";
+    const QPoint labelPos = imgwin->mapFromGlobal(event->globalPos()); // 新增：以影像區座標為準
+    QString str="(" + QString::number(labelPos.x()) + ", " + QString::number(labelPos.y()) +")";
     if (event->button() == Qt::LeftButton)
     {
         statusBar ()->showMessage (QStringLiteral("左鍵:")+str,1000);
+        if (!img.isNull() && imgwin->rect().contains(labelPos)) { // 新增：開始矩形選取
+            isSelecting = true;
+            selectionOrigin = labelPos;
+            if (!rubberBand) {
+                rubberBand = new QRubberBand(QRubberBand::Rectangle, imgwin);
+            }
+            rubberBand->setGeometry(QRect(selectionOrigin, QSize()));
+            rubberBand->show();
+        }
     }
     else if (event->button() == Qt:: RightButton)
     {
@@ -182,8 +202,35 @@ void ip::mousePressEvent (QMouseEvent * event)
 
 void ip::mouseReleaseEvent (QMouseEvent * event)
 {
-    QString str="(" + QString::number(event->x()) + ", " + QString::number(event->y()) +")";
+    const QPoint labelPos = imgwin->mapFromGlobal(event->globalPos()); // 新增：以影像區座標為準
+    QString str="(" + QString::number(labelPos.x()) + ", " + QString::number(labelPos.y()) +")";
     statusBar()->showMessage(QStringLiteral("釋放:")+str);
-}
 
+    if (event->button() == Qt::LeftButton && isSelecting && rubberBand) { // 新增：完成選取並放大
+        QRect selectedRect(selectionOrigin, labelPos);
+        selectedRect = selectedRect.normalized().intersected(imgwin->rect());
+        rubberBand->hide();
+        isSelecting = false;
+
+        if (!selectedRect.isEmpty() && !img.isNull()) {
+            const double scaleX = static_cast<double>(img.width()) / imgwin->width();
+            const double scaleY = static_cast<double>(img.height()) / imgwin->height();
+            const int left   = qBound(0, static_cast<int>(selectedRect.left()   * scaleX), img.width()  - 1);
+            const int top    = qBound(0, static_cast<int>(selectedRect.top()    * scaleY), img.height() - 1);
+            const int right  = qBound(0, static_cast<int>(selectedRect.right()  * scaleX), img.width()  - 1);
+            const int bottom = qBound(0, static_cast<int>(selectedRect.bottom() * scaleY), img.height() - 1);
+            const int w = qMax(1, right - left + 1);
+            const int h = qMax(1, bottom - top + 1);
+
+            QImage cropped = img.copy(left, top, w, h);
+            QImage zoomed = cropped.scaled(cropped.width() * 2, cropped.height() * 2,
+                                           Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            QLabel *preview = new QLabel; // 新增：顯示放大結果的新視窗
+            preview->setAttribute(Qt::WA_DeleteOnClose);
+            preview->setWindowTitle(QStringLiteral("矩形放大結果"));
+            preview->setPixmap(QPixmap::fromImage(zoomed));
+            preview->show();
+        }
+    }
+}
 
