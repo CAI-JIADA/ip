@@ -214,9 +214,9 @@ QPoint ip::mapLabelToImage(const QPoint &pt) const
 QRect ip::mapLabelRectToImage(const QRect &rect) const
 {
     if (img.isNull()) return QRect();
-    QPoint tl = mapLabelToImage(rect.topLeft());
-    QPoint br = mapLabelToImage(rect.bottomRight());
-    QRect mapped(tl, br);
+    QPoint topLeft = mapLabelToImage(rect.topLeft());
+    QPoint bottomRight = mapLabelToImage(rect.bottomRight());
+    QRect mapped(topLeft, bottomRight);
     return mapped.normalized().intersected(img.rect());
 }
 
@@ -232,8 +232,10 @@ void ip::mouseMoveEvent (QMouseEvent * event)
     if(!img.isNull() && x >= 0 && x < imgwin->width() && y >= 0 && y < imgwin->height())
     {
         const QPoint imgPos = mapLabelToImage(labelPos); // 新增：共用換算函式
-        int gray = qGray(img.pixel(imgPos));
-        str += ("=" + QString::number(gray));
+        if (img.rect().contains(imgPos)) { // 補強：安全界限檢查
+            int gray = qGray(img.pixel(imgPos));
+            str += ("=" + QString::number(gray));
+        }
     }
     MousePosLabel->setText(str);
 
