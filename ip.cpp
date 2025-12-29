@@ -1,9 +1,70 @@
 #include "ip.h"
 //#include "mouseevent.h"
-#include<QHBoxLayout>
 #include<QMenuBar>
 #include<QFileDialog>
 #include<QDebug>
+#include<QVBoxLayout>
+#include<QHBoxLayout>
+#include<QPainter>
+#include<QPen>
+#include<QPushButton>
+#include<QStandardPaths>
+#include<QDir>
+#include<QMessageBox>
+#include<QColorDialog>
+
+//-------------- 新增：可在預覽上手繪的標記元件 --------------
+class DrawingLabel : public QLabel
+{
+public:
+    explicit DrawingLabel(QWidget *parent = nullptr) : QLabel(parent) {
+        setMouseTracking(true);
+    }
+    void setImage(const QImage &img) {
+        // 新增：載入放大影像到可繪製的 ARGB 緩衝
+        drawable = img.convertToFormat(QImage::Format_ARGB32);
+        setFixedSize(drawable.size());
+        refresh();
+    }
+    const QImage &image() const { return drawable; }
+    void setDrawingEnabled(bool enabled) { drawingEnabled = enabled; } // 新增：控制是否允許畫筆
+    void setPenColor(const QColor &color) { penColor = color; } // 新增：設定畫筆顏色
+    QColor currentPenColor() const { return penColor; }
+
+protected:
+    void mousePressEvent(QMouseEvent *event) override {
+        if (drawingEnabled && event->button() == Qt::LeftButton) {
+            drawing = true;
+            lastPos = event->pos();
+        }
+        QLabel::mousePressEvent(event);
+    }
+    void mouseMoveEvent(QMouseEvent *event) override {
+        if (drawingEnabled && drawing && (event->buttons() & Qt::LeftButton)) {
+            QPainter painter(&drawable);
+            painter.setRenderHint(QPainter::Antialiasing);
+            painter.setPen(QPen(penColor, 2, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            painter.drawLine(lastPos, event->pos());
+            lastPos = event->pos();
+            refresh();
+        }
+        QLabel::mouseMoveEvent(event);
+    }
+    void mouseReleaseEvent(QMouseEvent *event) override {
+        drawing = false;
+        QLabel::mouseReleaseEvent(event);
+    }
+private:
+    void refresh() {
+        setPixmap(QPixmap::fromImage(drawable));
+    }
+    QImage drawable;
+    bool drawing = false;
+    bool drawingEnabled = true; // 新增：畫筆啟用狀態
+    QPoint lastPos;
+    QColor penColor = Qt::red;  // 新增：預設畫筆顏色
+};
+//-------------- 新增結束 --------------
 
 ip::ip(QWidget *parent)
     : QMainWindow(parent)
@@ -56,7 +117,7 @@ void ip::createActions()
     GAction = new QAction (QStringLiteral("幾何轉換"),this);
     GAction->setShortcut (tr("Ctrl+G"));
     GAction->setStatusTip (QStringLiteral("影像幾何轉換"));
-    connect (GAction, SIGNAL (triggered()), this, SLOT (showmouseevent()));
+    connect (GAction, SIGNAL (triggered()), this, SLOT (showGTranform())); // 修正：連結到正確的槽函式
     connect (exitAction, SIGNAL (triggered()),gwin, SLOT (close()));
 
 
@@ -147,28 +208,71 @@ void ip::showGTranform()
     gwin->show();
 }
 
+// 新增：將 QLabel 座標換算成原圖座標，避免放大/縮小造成查詢錯位
+QPoint ip::mapLabelToImage(const QPoint &pt) const
+{
+    if (img.isNull() || imgwin == nullptr || imgwin->width() == 0 || imgwin->height() == 0)
+        return QPoint(-1, -1); // 以 (-1,-1) 表示換算失敗，避免與合法座標混淆
+    const double scaleX = static_cast<double>(img.width()) / imgwin->width();
+    const double scaleY = static_cast<double>(img.height()) / imgwin->height();
+    const int imgX = qBound(0, static_cast<int>(pt.x() * scaleX), img.width() - 1);
+    const int imgY = qBound(0, static_cast<int>(pt.y() * scaleY), img.height() - 1);
+    return QPoint(imgX, imgY);
+}
+
+// 新增：矩形選取換算成原圖矩形，並限制在原圖範圍內
+QRect ip::mapLabelRectToImage(const QRect &rect) const
+{
+    if (img.isNull() || imgwin == nullptr) return QRect();
+    QPoint topLeft = mapLabelToImage(rect.topLeft());
+    QPoint bottomRight = mapLabelToImage(rect.bottomRight());
+    if (topLeft.x() < 0 || topLeft.y() < 0 || bottomRight.x() < 0 || bottomRight.y() < 0)
+        return QRect(); // 失敗時回傳空矩形
+    QRect mapped(topLeft, bottomRight);
+    return mapped.normalized().intersected(img.rect());
+}
+
 
 
 void ip::mouseMoveEvent (QMouseEvent * event)
 {
-    int x = event->x();
-    int y = event->y();
+    const QPoint labelPos = imgwin->mapFromGlobal(event->globalPos()); // 新增：將座標轉為影像區域
+    int x = labelPos.x();
+    int y = labelPos.y();
 
     QString str="(" + QString::number(x) + ", " + QString::number(y) +")";
     if(!img.isNull() && x >= 0 && x < imgwin->width() && y >= 0 && y < imgwin->height())
     {
-        int gray = qGray(img.pixel(x,y));
-        str += ("=" + QString::number(gray));
+        const QPoint imgPos = mapLabelToImage(labelPos); // 新增：共用換算函式
+        if (imgPos.x() >= 0 && imgPos.y() >= 0 && img.rect().contains(imgPos)) { // 補強：安全界限檢查
+            int gray = qGray(img.pixel(imgPos));
+            str += ("=" + QString::number(gray));
+        }
     }
     MousePosLabel->setText(str);
+
+    if (isSelecting && rubberBand) { // 新增：拖曳時更新選取框
+        QRect rect(selectionOrigin, labelPos);
+        rubberBand->setGeometry(rect.normalized());
+    }
 }
 
 void ip::mousePressEvent (QMouseEvent * event)
 {
-    QString str="(" + QString::number(event->x()) + ", " + QString::number(event->y()) +")";
+    const QPoint labelPos = imgwin->mapFromGlobal(event->globalPos()); // 新增：以影像區座標為準
+    QString str="(" + QString::number(labelPos.x()) + ", " + QString::number(labelPos.y()) +")";
     if (event->button() == Qt::LeftButton)
     {
         statusBar ()->showMessage (QStringLiteral("左鍵:")+str,1000);
+        if (!img.isNull() && imgwin->rect().contains(labelPos)) { // 新增：左鍵拖曳啟動矩形選取
+            isSelecting = true;
+            selectionOrigin = labelPos;
+            if (!rubberBand) {
+                rubberBand = new QRubberBand(QRubberBand::Rectangle, imgwin);
+            }
+            rubberBand->setGeometry(QRect(selectionOrigin, QSize()));
+            rubberBand->show();
+        }
     }
     else if (event->button() == Qt:: RightButton)
     {
@@ -182,8 +286,89 @@ void ip::mousePressEvent (QMouseEvent * event)
 
 void ip::mouseReleaseEvent (QMouseEvent * event)
 {
-    QString str="(" + QString::number(event->x()) + ", " + QString::number(event->y()) +")";
+    const QPoint labelPos = imgwin->mapFromGlobal(event->globalPos()); // 新增：以影像區座標為準
+    QString str="(" + QString::number(labelPos.x()) + ", " + QString::number(labelPos.y()) +")";
     statusBar()->showMessage(QStringLiteral("釋放:")+str);
+
+    if (event->button() == Qt::LeftButton && isSelecting && rubberBand) { // 新增：完成選取並放大
+        QRect selectionRect(selectionOrigin, labelPos);
+        selectionRect = selectionRect.normalized().intersected(imgwin->rect());
+        rubberBand->hide();
+        isSelecting = false;
+
+        if (!selectionRect.isEmpty() && !img.isNull()) {
+            const QRect sourceRect = mapLabelRectToImage(selectionRect); // 新增：統一座標換算
+            if (!sourceRect.isEmpty()) {
+                QImage cropped = img.copy(sourceRect);
+                QImage zoomed = cropped.scaled(cropped.width() * 2, cropped.height() * 2,
+                                               Qt::KeepAspectRatio, Qt::SmoothTransformation);
+
+                QWidget *preview = new QWidget; // 新增：帶有畫筆/存檔功能的預覽窗
+                preview->setAttribute(Qt::WA_DeleteOnClose);
+                preview->setWindowTitle(QStringLiteral("矩形放大結果（可標註/儲存）"));
+
+                auto *layout = new QVBoxLayout(preview);
+                auto *drawArea = new DrawingLabel(preview);
+                drawArea->setImage(zoomed); // 新增：放大圖載入可繪製元件
+                layout->addWidget(drawArea, 1);
+
+                //-------------- 新增：畫筆控制與顏色選擇 --------------
+                auto *controlRow = new QHBoxLayout();
+                QPushButton *toggleDrawBtn = new QPushButton(QStringLiteral("畫筆啟用"), preview);
+                toggleDrawBtn->setCheckable(true);
+                toggleDrawBtn->setChecked(true);
+                QPushButton *colorBtn = new QPushButton(QStringLiteral("選擇顏色"), preview);
+                controlRow->addWidget(toggleDrawBtn);
+                controlRow->addWidget(colorBtn);
+                controlRow->addStretch();
+                layout->addLayout(controlRow);
+                //-------------- 新增結束 --------------
+
+                //-------------- 新增：儲存/關閉按鈕列 --------------
+                auto *btnRow = new QHBoxLayout();
+                QPushButton *saveBtn = new QPushButton(QStringLiteral("儲存"), preview);
+                QPushButton *closeBtn = new QPushButton(QStringLiteral("關閉"), preview);
+                btnRow->addStretch();
+                btnRow->addWidget(saveBtn);
+                btnRow->addWidget(closeBtn);
+                layout->addLayout(btnRow);
+                //-------------- 新增結束 --------------
+
+                connect(saveBtn, &QPushButton::clicked, preview, [preview, drawArea]() {
+                    // 新增：儲存繪製後結果
+                    QString defaultDir = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
+                    if (defaultDir.isEmpty()) defaultDir = QDir::homePath();
+                    QString path = QFileDialog::getSaveFileName(
+                        preview,
+                        QStringLiteral("儲存標註影像"),
+                        defaultDir, // 新增：預設路徑指到圖片資料夾
+                        QStringLiteral("PNG Files (*.png);;JPG Files (*.jpg)")
+                    );
+                    if (!path.isEmpty()) {
+                        const bool ok = drawArea->image().save(path);
+                        if (!ok) {
+                            QMessageBox::warning(preview,
+                                                 QStringLiteral("儲存失敗"),
+                                                 QStringLiteral("檔案無法儲存，請確認路徑與權限。"));
+                        }
+                    }
+                });
+                connect(closeBtn, &QPushButton::clicked, preview, &QWidget::close);
+
+                connect(toggleDrawBtn, &QPushButton::toggled, drawArea, [drawArea](bool on){
+                    drawArea->setDrawingEnabled(on);
+                    drawArea->setCursor(on ? Qt::CrossCursor : Qt::ArrowCursor);
+                });
+                connect(colorBtn, &QPushButton::clicked, preview, [preview, drawArea](){
+                    QColor chosen = QColorDialog::getColor(drawArea->currentPenColor(), preview, QStringLiteral("選擇畫筆顏色"));
+                    if (chosen.isValid()) {
+                        drawArea->setPenColor(chosen);
+                    }
+                });
+
+                preview->adjustSize(); // 依實際排版自動計算視窗大小
+                preview->show();
+            }
+        }
+    }
 }
-
-

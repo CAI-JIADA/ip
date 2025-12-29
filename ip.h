@@ -2,13 +2,16 @@
 #define IP_H
 
 #include<QMainWindow>
-#include<QACtion>
+#include<QAction>
 #include<QMenu>
 #include<QToolBar>
 #include<QImage>
 #include<QLabel>
 #include <QMouseEvent>
 #include <QStatusBar>
+#include <QRubberBand> // 新增：用於矩形選取的橡皮筋框
+#include <QPoint>
+#include <QRect>
 #include"gtransform.h"
 //#include"mouseevent.h"
 
@@ -39,6 +42,8 @@ private slots:
     void showGTranform();
 
 private:
+    QPoint mapLabelToImage(const QPoint &pt) const; // 新增：將顯示座標轉回影像座標
+    QRect mapLabelRectToImage(const QRect &rect) const; // 新增：矩形座標轉換輔助
 
     GTransform *gwin;
     QWidget *central;
@@ -60,6 +65,9 @@ private:
 
     int x=300;
     int y=200;
+    QRubberBand *rubberBand = nullptr; // 新增：顯示選取範圍的框
+    QPoint selectionOrigin;            // 新增：記錄選取起點
+    bool isSelecting = false;          // 新增：標記是否正在拖曳選取
 
 
 };
