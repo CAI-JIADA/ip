@@ -308,10 +308,10 @@ void ip::mouseReleaseEvent (QMouseEvent * event)
                 btnRow->addWidget(closeBtn);
                 layout->addLayout(btnRow);
 
-                connect(saveBtn, &QPushButton::clicked, preview, [this, drawArea]() {
+                connect(saveBtn, &QPushButton::clicked, preview, [preview, drawArea]() {
                     // 新增：儲存繪製後結果
                     QString path = QFileDialog::getSaveFileName(
-                        nullptr,
+                        preview,
                         QStringLiteral("儲存標註影像"),
                         "",
                         QStringLiteral("PNG Files (*.png);;JPG Files (*.jpg)")
@@ -322,7 +322,9 @@ void ip::mouseReleaseEvent (QMouseEvent * event)
                 });
                 connect(closeBtn, &QPushButton::clicked, preview, &QWidget::close);
 
-                preview->resize(zoomed.width() + 40, zoomed.height() + 80);
+                const int paddingW = 40; // 新增：預覽窗左右留白
+                const int paddingH = 80; // 新增：預覽窗上下留白與按鈕列空間
+                preview->resize(zoomed.width() + paddingW, zoomed.height() + paddingH);
                 preview->show();
             }
         }
