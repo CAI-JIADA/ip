@@ -11,6 +11,7 @@
 #include <QStatusBar>
 #include <QRubberBand> // 新增：用於矩形選取的橡皮筋框
 #include <QPoint>
+#include <QRect>
 #include"gtransform.h"
 //#include"mouseevent.h"
 
@@ -41,6 +42,8 @@ private slots:
     void showGTranform();
 
 private:
+    QPoint mapLabelToImage(const QPoint &pt) const; // 新增：將顯示座標轉回影像座標
+    QRect mapLabelRectToImage(const QRect &rect) const; // 新增：矩形座標轉換輔助
 
     GTransform *gwin;
     QWidget *central;
