@@ -7,7 +7,10 @@
 #include<QToolBar>
 #include<QImage>
 #include<QLabel>
+#include <QMouseEvent>
+#include <QStatusBar>
 #include"gtransform.h"
+//#include"mouseevent.h"
 
 #include <QMainWindow>
 
@@ -22,12 +25,21 @@ public:
     void createMenus();
     void createToolBars();
     void loadFile(QString filename);
+
+protected:
+
+    void mouseMoveEvent (QMouseEvent * event);
+    void mousePressEvent (QMouseEvent * event);
+    void mouseReleaseEvent (QMouseEvent * event);
+
 private slots:
     void showopenFile();
     void bigfile();
     void smallfile();
     void showGTranform();
+
 private:
+
     GTransform *gwin;
     QWidget *central;
     QMenu   *fileMenu;
@@ -42,6 +54,10 @@ private:
     QAction *big;
     QAction *small;
     QAction *GAction;
+
+    QLabel *statusLabel;
+    QLabel *MousePosLabel;
+
     int x=300;
     int y=200;
 
