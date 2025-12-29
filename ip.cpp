@@ -11,8 +11,9 @@
 #include<QStandardPaths>
 #include<QDir>
 #include<QMessageBox>
+#include<QColorDialog>
 
-// 新增：可在預覽上手繪的標記元件
+//-------------- 新增：可在預覽上手繪的標記元件 --------------
 class DrawingLabel : public QLabel
 {
 public:
@@ -26,20 +27,23 @@ public:
         refresh();
     }
     const QImage &image() const { return drawable; }
+    void setDrawingEnabled(bool enabled) { drawingEnabled = enabled; } // 新增：控制是否允許畫筆
+    void setPenColor(const QColor &color) { penColor = color; } // 新增：設定畫筆顏色
+    QColor currentPenColor() const { return penColor; }
 
 protected:
     void mousePressEvent(QMouseEvent *event) override {
-        if (event->button() == Qt::LeftButton) {
+        if (drawingEnabled && event->button() == Qt::LeftButton) {
             drawing = true;
             lastPos = event->pos();
         }
         QLabel::mousePressEvent(event);
     }
     void mouseMoveEvent(QMouseEvent *event) override {
-        if (drawing && (event->buttons() & Qt::LeftButton)) {
+        if (drawingEnabled && drawing && (event->buttons() & Qt::LeftButton)) {
             QPainter painter(&drawable);
             painter.setRenderHint(QPainter::Antialiasing);
-            painter.setPen(QPen(Qt::red, 2, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            painter.setPen(QPen(penColor, 2, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
             painter.drawLine(lastPos, event->pos());
             lastPos = event->pos();
             refresh();
@@ -56,8 +60,11 @@ private:
     }
     QImage drawable;
     bool drawing = false;
+    bool drawingEnabled = true; // 新增：畫筆啟用狀態
     QPoint lastPos;
+    QColor penColor = Qt::red;  // 新增：預設畫筆顏色
 };
+//-------------- 新增結束 --------------
 
 ip::ip(QWidget *parent)
     : QMainWindow(parent)
@@ -305,6 +312,19 @@ void ip::mouseReleaseEvent (QMouseEvent * event)
                 drawArea->setImage(zoomed); // 新增：放大圖載入可繪製元件
                 layout->addWidget(drawArea, 1);
 
+                //-------------- 新增：畫筆控制與顏色選擇 --------------
+                auto *controlRow = new QHBoxLayout();
+                QPushButton *toggleDrawBtn = new QPushButton(QStringLiteral("畫筆啟用"), preview);
+                toggleDrawBtn->setCheckable(true);
+                toggleDrawBtn->setChecked(true);
+                QPushButton *colorBtn = new QPushButton(QStringLiteral("選擇顏色"), preview);
+                controlRow->addWidget(toggleDrawBtn);
+                controlRow->addWidget(colorBtn);
+                controlRow->addStretch();
+                layout->addLayout(controlRow);
+                //-------------- 新增結束 --------------
+
+                //-------------- 新增：儲存/關閉按鈕列 --------------
                 auto *btnRow = new QHBoxLayout();
                 QPushButton *saveBtn = new QPushButton(QStringLiteral("儲存"), preview);
                 QPushButton *closeBtn = new QPushButton(QStringLiteral("關閉"), preview);
@@ -312,6 +332,7 @@ void ip::mouseReleaseEvent (QMouseEvent * event)
                 btnRow->addWidget(saveBtn);
                 btnRow->addWidget(closeBtn);
                 layout->addLayout(btnRow);
+                //-------------- 新增結束 --------------
 
                 connect(saveBtn, &QPushButton::clicked, preview, [preview, drawArea]() {
                     // 新增：儲存繪製後結果
@@ -333,6 +354,17 @@ void ip::mouseReleaseEvent (QMouseEvent * event)
                     }
                 });
                 connect(closeBtn, &QPushButton::clicked, preview, &QWidget::close);
+
+                connect(toggleDrawBtn, &QPushButton::toggled, drawArea, [drawArea](bool on){
+                    drawArea->setDrawingEnabled(on);
+                    drawArea->setCursor(on ? Qt::CrossCursor : Qt::ArrowCursor);
+                });
+                connect(colorBtn, &QPushButton::clicked, preview, [preview, drawArea](){
+                    QColor chosen = QColorDialog::getColor(drawArea->currentPenColor(), preview, QStringLiteral("選擇畫筆顏色"));
+                    if (chosen.isValid()) {
+                        drawArea->setPenColor(chosen);
+                    }
+                });
 
                 preview->adjustSize(); // 依實際排版自動計算視窗大小
                 preview->show();
