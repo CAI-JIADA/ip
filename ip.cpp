@@ -10,6 +10,7 @@
 #include<QPushButton>
 #include<QStandardPaths>
 #include<QDir>
+#include<QMessageBox>
 
 static constexpr int kPreviewPaddingW = 40; // 新增：預覽窗左右留白
 static constexpr int kPreviewPaddingH = 80; // 新增：預覽窗上下留白與按鈕列空間
@@ -206,7 +207,8 @@ void ip::showGTranform()
 // 新增：將 QLabel 座標換算成原圖座標，避免放大/縮小造成查詢錯位
 QPoint ip::mapLabelToImage(const QPoint &pt) const
 {
-    if (img.isNull() || imgwin == nullptr || imgwin->width() == 0 || imgwin->height() == 0) return QPoint(0, 0);
+    if (img.isNull() || imgwin == nullptr || imgwin->width() == 0 || imgwin->height() == 0)
+        return QPoint(-1, -1); // 以 (-1,-1) 表示換算失敗，避免與合法座標混淆
     const double scaleX = static_cast<double>(img.width()) / imgwin->width();
     const double scaleY = static_cast<double>(img.height()) / imgwin->height();
     const int imgX = qBound(0, static_cast<int>(pt.x() * scaleX), img.width() - 1);
@@ -220,6 +222,8 @@ QRect ip::mapLabelRectToImage(const QRect &rect) const
     if (img.isNull() || imgwin == nullptr) return QRect();
     QPoint topLeft = mapLabelToImage(rect.topLeft());
     QPoint bottomRight = mapLabelToImage(rect.bottomRight());
+    if (topLeft.x() < 0 || topLeft.y() < 0 || bottomRight.x() < 0 || bottomRight.y() < 0)
+        return QRect(); // 失敗時回傳空矩形
     QRect mapped(topLeft, bottomRight);
     return mapped.normalized().intersected(img.rect());
 }
@@ -323,7 +327,12 @@ void ip::mouseReleaseEvent (QMouseEvent * event)
                         QStringLiteral("PNG Files (*.png);;JPG Files (*.jpg)")
                     );
                     if (!path.isEmpty()) {
-                        drawArea->image().save(path);
+                        const bool ok = drawArea->image().save(path);
+                        if (!ok) {
+                            QMessageBox::warning(preview,
+                                                 QStringLiteral("儲存失敗"),
+                                                 QStringLiteral("檔案無法儲存，請確認路徑與權限。"));
+                        }
                     }
                 });
                 connect(closeBtn, &QPushButton::clicked, preview, &QWidget::close);
