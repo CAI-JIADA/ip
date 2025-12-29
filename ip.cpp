@@ -12,9 +12,6 @@
 #include<QDir>
 #include<QMessageBox>
 
-static constexpr int kPreviewPaddingW = 40; // 新增：預覽窗左右留白
-static constexpr int kPreviewPaddingH = 80; // 新增：預覽窗上下留白與按鈕列空間
-
 // 新增：可在預覽上手繪的標記元件
 class DrawingLabel : public QLabel
 {
@@ -240,7 +237,7 @@ void ip::mouseMoveEvent (QMouseEvent * event)
     if(!img.isNull() && x >= 0 && x < imgwin->width() && y >= 0 && y < imgwin->height())
     {
         const QPoint imgPos = mapLabelToImage(labelPos); // 新增：共用換算函式
-        if (img.rect().contains(imgPos)) { // 補強：安全界限檢查
+        if (imgPos.x() >= 0 && imgPos.y() >= 0 && img.rect().contains(imgPos)) { // 補強：安全界限檢查
             int gray = qGray(img.pixel(imgPos));
             str += ("=" + QString::number(gray));
         }
@@ -287,13 +284,13 @@ void ip::mouseReleaseEvent (QMouseEvent * event)
     statusBar()->showMessage(QStringLiteral("釋放:")+str);
 
     if (event->button() == Qt::LeftButton && isSelecting && rubberBand) { // 新增：完成選取並放大
-        QRect selectedRect(selectionOrigin, labelPos);
-        selectedRect = selectedRect.normalized().intersected(imgwin->rect());
+        QRect selectionRect(selectionOrigin, labelPos);
+        selectionRect = selectionRect.normalized().intersected(imgwin->rect());
         rubberBand->hide();
         isSelecting = false;
 
-        if (!selectedRect.isEmpty() && !img.isNull()) {
-            const QRect sourceRect = mapLabelRectToImage(selectedRect); // 新增：統一座標換算
+        if (!selectionRect.isEmpty() && !img.isNull()) {
+            const QRect sourceRect = mapLabelRectToImage(selectionRect); // 新增：統一座標換算
             if (!sourceRect.isEmpty()) {
                 QImage cropped = img.copy(sourceRect);
                 QImage zoomed = cropped.scaled(cropped.width() * 2, cropped.height() * 2,
@@ -337,7 +334,7 @@ void ip::mouseReleaseEvent (QMouseEvent * event)
                 });
                 connect(closeBtn, &QPushButton::clicked, preview, &QWidget::close);
 
-                preview->resize(zoomed.width() + kPreviewPaddingW, zoomed.height() + kPreviewPaddingH);
+                preview->adjustSize(); // 依實際排版自動計算視窗大小
                 preview->show();
             }
         }
